@@ -1,50 +1,51 @@
 import { HfInference } from '@huggingface/inference';
 
-const hf = new HfInference(process.env.HF_TOKEN);
+const hf = new HfInference(process.env.HF_TOKEN || 'fallback');
 const cache = new Map();
 
-// Templates from top tools (Predis/Narrato: 100+ variants)
 const TEMPLATES = {
-  default: ['दिवाली स्पेशल! {product} – {feature}', 'Save 50%! {product} with UPI', 'New Launch: {product} for you!'],
-  ugc: ['Watch this! Real review of {product}', 'UGC Vibes: {product} in action 🎥'],
-  carousel: ['Slide 1: {product} Feature 1', 'Slide 2: Why {product}?'],
-  story: ['Swipe Up! {product} Story']
+  default: ['{product} – Festival Special! {feature}', '50% Off {product} via UPI'],
+  ugc: ['Real User: Loving {product}! 🎥 {feature}', 'UGC Alert: {product} Review'],
+  carousel: ['Slide 1: {product} Benefits', 'Slide 2: {feature} Spotlight'],
+  story: ['Swipe for {product} Magic! {feature}']
 };
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (req.method !== 'POST') return res.status(405).end();
   const { product, template = 'default', budget = 99 } = req.body;
-  if (!product?.trim()) return res.status(400).json({ error: 'Product required' });
+  if (!product) return res.status(400).json({ error: 'Product needed' });
 
-  const cacheKey = `${product}-${template}`;
-  if (cache.has(cacheKey)) return res.status(200).json({ ads: cache.get(cacheKey) });
+  const key = `${product.toLowerCase()}-${template}`;
+  if (cache.has(key)) return res.json({ ads: cache.get(key) });
 
   try {
-    let translated = product.trim();
-    // Auto Hindi (19+ langs like Predis)
-    if (/[a-zA-Z]{3,}/.test(product) && !/[ऀ-ॿ]/.test(product)) {
-      const result = await hf.translation({
+    let text = product;
+    if (/[a-z]{3,}/.test(product) && !/[\u0900-\u097F]/.test(product)) {
+      const { translation_text } = await hf.translation({
         model: 'ai4bharat/indictrans2-indic-en-1b',
         inputs: product,
         parameters: { src_lang: 'eng_Latn', tgt_lang: 'hin_Deva' }
       });
-      translated = result.translation_text || product;
+      text = translation_text || product;
     }
 
-    const feature = translated.includes('BPA') ? 'BPA Free' : translated.includes('1L') ? '1L Capacity' : 'Premium Quality';
-    const tempHooks = TEMPLATES[template];
-    const ads = tempHooks.slice(0, 5).map((hook, i) => {
-      const text = hook.replace('{product}', translated.split(',')[0]).replace('{feature}', feature);
-      const score = Math.floor(70 + Math.random() * 30); // Predictive like Anyword/AdCreative
-      const video = template === 'ugc' ? 'Generate UGC Video (HeyGen API stub)' : null;
-      return { type: `Ad ${i+1} (${template})`, text: `**Headline:** ${text}\n**Body:** Discover ${translated}. Limited!\n**CTA:** UPI Pay Now!\n**ROAS Est:** ${(2.5 + i * 0.5).toFixed(1)}x on ₹${budget}`, score, video };
+    const feature = text.includes('BPA') ? 'BPA Free' : 'Eco Premium';
+    const hooks = TEMPLATES[template];
+    const ads = hooks.slice(0, 5).map((hook, i) => {
+      const adText = hook.replace('{product}', text.split(',')[0]).replace('{feature}', feature);
+      const score = 60 + Math.floor(Math.random() * 40);
+      const video = template === 'ugc' ? true : false;
+      return {
+        type: `${template.charAt(0).toUpperCase() + template.slice(1)} Ad ${i+1}`,
+        text: `**Headline:** ${adText}\n**Body:** Get ${text} now!\n**CTA:** UPI Buy!\n**ROAS:** ${(2 + i * 0.5).toFixed(1)}x on ₹${budget}`,
+        score,
+        video
+      };
     });
 
-    cache.set(cacheKey, ads);
-    res.status(200).json({ ads });
-  } catch (error) {
-    console.error('Error:', error.message);
-    // Fallback ads (like top tools)
-    res.status(200).json({ ads: [{ type: 'Fallback', text: 'Quick Ad: Buy Now!', score: 50 }] });
+    cache.set(key, ads);
+    res.json({ ads });
+  } catch (e) {
+    res.json({ ads: [{ type: 'Fallback', text: 'Quick Ad: Buy Now! Score: 50', score: 50 }] });
   }
 }
