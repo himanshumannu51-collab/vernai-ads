@@ -1,30 +1,51 @@
-import { pipeline } from '@huggingface/inference';
+import { HfInference } from '@huggingface/inference';
 
-const hf = pipeline('text2text-generation', 'ai4bharat/indictrans2-indic-en-1b', {
-  token: process.env.HF_TOKEN // Add your HF token in Vercel
-});
+const hf = new HfInference(process.env.HF_TOKEN);
+
+// Cache hooks
+const HOOKS = ['दिवाली स्पेशल ऑफर!', 'होली धमाका!', 'आज ही ऑर्डर करें!'];
+
+// In-memory cache (Vercel serverless)
+const cache = new Map();
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { product, language = 'hi', budget = 99 } = req.body;
+  const { product } = req.body;
+  if (!product?.trim()) return res.status(400).json({ error: 'Product required' });
 
-  if (!product) return res.status(400).json({ error: 'Product required' });
-
-  let translated = product;
-  if (language === 'en') {
-    translated = (await hf(product, { src_lang: 'eng_Latn', tgt_lang: 'hin_Deva' }))[0].generated_text;
+  const cacheKey = product.trim().toLowerCase();
+  if (cache.has(cacheKey)) {
+    return res.status(200).json({ ads: cache.get(cacheKey) });
   }
 
-  const hooks = ["दिवाली स्पेशल ऑफर!", "होली धमाका!", "आज ही ऑर्डर करें!"];
-  const ads = [];
+  try {
+    let translated = product.trim();
 
-  for (let i = 0; i < 5; i++) {
-    const hook = hooks[i % hooks.length];
-    const roas = (2.5 + i * 0.3 + budget / 100).toFixed(1);
-    const ad = `**विज्ञापन ${i+1}**\n**हेडलाइन:** ${translated.slice(0, 50)}... ${hook}\n**बॉडी:** ${translated}. ${hook}\n**CTA:** UPI से पेमेंट करें → अभी खरीदें!\n**अनुमानित ROAS:** ${roas}x (₹${budget} बजट पर)`;
-    ads.push(ad);
+    // Auto-detect English → Hindi
+    if (/[a-zA-Z]/.test(product) && !/[ऀ-ॿ]/.test(product)) {
+      const result = await hf.translation({
+        model: 'ai4bharat/indictrans2-indic-en-1b',
+        inputs: product,
+        parameters: { src_lang: 'eng_Latn', tgt_lang: 'hin_Deva' }
+      });
+      translated = result.translation_text || product;
+    }
+
+    const ads = HOOKS.map((hook, i) => {
+      const roas = (2.8 + i * 0.3).toFixed(1);
+      return `**विज्ञापन ${i + 1}**\n**हेडलाइन:** ${translated.slice(0, 45)}... ${hook}\n**बॉडी:** ${translated}. ${hook}\n**CTA:** UPI से अभी खरीदें!\n**ROAS:** ${roas}x (₹99 बजट पर)`;
+    });
+
+    cache.set(cacheKey, ads);
+    res.status(200).json({ ads });
+  } catch (error) {
+    console.error('HF Error:', error.message);
+    // Fallback: Use input as-is
+    const ads = HOOKS.map((hook, i) => {
+      const roas = (2.8 + i * 0.3).toFixed(1);
+      return `**विज्ञापन ${i + 1}**\n**हेडलाइन:** ${product.slice(0, 45)}... ${hook}\n**CTA:** UPI से अभी खरीदें!\n**ROAS:** ${roas}x`;
+    });
+    res.status(200).json({ ads });
   }
-
-  res.status(200).json({ ads });
 }
