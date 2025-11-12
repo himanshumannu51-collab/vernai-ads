@@ -4,7 +4,9 @@ const nextConfig = {
   swcMinify: true,
   experimental: {
     serverComponentsExternalPackages: ['@huggingface/inference']
-  }
+  },
+  trailingSlash: false,
+  output: 'standalone'
 };
 
 module.exports = nextConfig;
