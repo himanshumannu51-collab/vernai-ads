@@ -1,4 +1,4 @@
-// pages/api/generate-ads.js
+// pages/api/generate-ads.js - OpenAI Version
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -8,73 +8,72 @@ export default async function handler(req, res) {
   try {
     const { prompt, formData, single } = req.body;
 
-    // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call OpenAI API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY, // Your API key from .env.local
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        model: 'gpt-4o-mini', // Fast and cheap! Or use 'gpt-4o' for better quality
         messages: [
+          {
+            role: 'system',
+            content: 'You are an expert Indian ad copywriter. You create culturally relevant, high-converting advertisements for Indian businesses. Always respond with valid JSON only, no markdown formatting.'
+          },
           {
             role: 'user',
             content: prompt
           }
-        ]
+        ],
+        temperature: 0.8,
+        max_tokens: 2000,
+        response_format: { type: "json_object" } // Forces JSON response
       })
     });
 
     if (!response.ok) {
+      const errorData = await response.json();
+      console.error('OpenAI API Error:', errorData);
       throw new Error(`API call failed: ${response.statusText}`);
     }
 
     const data = await response.json();
+    const content = data.choices[0].message.content;
     
-    // Extract text from response
-    const content = data.content[0].text;
-    
-    // Clean and parse JSON
-    const cleanJson = content
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-    
-    let ads;
+    let adsData;
     try {
-      ads = JSON.parse(cleanJson);
+      // Parse JSON response
+      adsData = JSON.parse(content);
+      
+      // OpenAI might return {ads: [...]} or just [...]
+      let ads = adsData.ads || adsData;
+      
+      if (!Array.isArray(ads)) {
+        ads = [ads];
+      }
+
+      const finalAds = single ? [ads[0]] : ads;
+      return res.status(200).json({ ads: finalAds });
+
     } catch (parseError) {
-      // If parsing fails, return mock data
       console.error('JSON parse error:', parseError);
-      ads = generateMockAds(formData);
+      // Fallback to mock data
+      const mockAds = generateMockAds(formData);
+      return res.status(200).json({ ads: mockAds });
     }
-
-    // Ensure ads is an array
-    if (!Array.isArray(ads)) {
-      ads = [ads];
-    }
-
-    // Return only 1 ad if single=true, otherwise return all
-    const finalAds = single ? [ads[0]] : ads;
-
-    return res.status(200).json({ ads: finalAds });
 
   } catch (error) {
     console.error('API Error:', error);
-    
     // Fallback to mock ads on error
     const mockAds = generateMockAds(req.body.formData);
     return res.status(200).json({ ads: mockAds });
   }
 }
 
-// Fallback mock data generator
 function generateMockAds(formData) {
   const { businessName, product, targetAudience, offer, cta, language } = formData;
-  
   const isHindi = language === 'hindi' || language === 'hinglish';
   
   if (isHindi) {
@@ -131,7 +130,6 @@ function generateMockAds(formData) {
       }
     ];
   } else {
-    // English ads
     return [
       {
         headline: `${businessName} - Biggest ${offer}! 🎉`,
