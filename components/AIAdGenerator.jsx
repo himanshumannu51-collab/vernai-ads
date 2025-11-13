@@ -1,6 +1,6 @@
 // components/AIAdGenerator.jsx
 import React, { useState } from 'react';
-import { Sparkles, Target, TrendingUp, RefreshCw, Copy, Download, Star, Zap, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Sparkles, Target, RefreshCw, Copy, Download, Star, Zap, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 export default function AIAdGenerator() {
   const [loading, setLoading] = useState(false);
@@ -59,7 +59,7 @@ Return JSON in this EXACT format:
   ]
 }`;
 
-      // Call YOUR backend API (not direct Claude API)
+      // Call YOUR backend API (not direct OpenAI)
       const response = await fetch('/api/generate-ads', {
         method: 'POST',
         headers: {
@@ -77,8 +77,12 @@ Return JSON in this EXACT format:
         throw new Error(data.error);
       }
       
-      // Parse the AI response
-      let ads = data.ads;
+      // Parse the AI response (OpenAI returns {ads: [...]})
+      let ads = data.ads || [];
+      
+      if (!Array.isArray(ads)) {
+        ads = [ads];
+      }
       
       // Add scoring if not present
       const scoredAds = ads.map(ad => ({
