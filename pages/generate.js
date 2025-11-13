@@ -1,3 +1,4 @@
+// pages/generate.js
 import AIAdGenerator from '../components/AIAdGenerator';
 
 export default function GeneratePage() {
