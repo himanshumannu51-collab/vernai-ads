@@ -1,0 +1,473 @@
+import React, { useState } from 'react';
+import { Sparkles, Target, TrendingUp, RefreshCw, Copy, Download, Star, Zap, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+
+export default function AIAdGenerator() {
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({
+    businessName: '',
+    product: '',
+    targetAudience: '',
+    language: 'hindi',
+    tone: 'friendly',
+    offer: '',
+    cta: ''
+  });
+  const [generatedAds, setGeneratedAds] = useState([]);
+  const [selectedAd, setSelectedAd] = useState(null);
+
+  // AI Ad Generation Function
+  const generateAds = async () => {
+    setLoading(true);
+    
+    try {
+      const prompt = `You are an expert Indian ad copywriter. Create 5 high-converting ${formData.language} advertisement variations for:
+
+Business: ${formData.businessName}
+Product/Service: ${formData.product}
+Target Audience: ${formData.targetAudience}
+Tone: ${formData.tone}
+Special Offer: ${formData.offer}
+Call-to-Action: ${formData.cta}
+
+For each ad variation, provide:
+1. A catchy headline (max 60 characters)
+2. Main body copy (2-3 sentences, max 150 characters)
+3. Strong call-to-action
+4. 3-5 relevant emojis
+5. 2-3 hashtags
+
+Make them culturally relevant for Indian audiences. Use local expressions, festivals references where appropriate.
+
+Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emojis, hashtags, score (0-100), strengths (array), improvements (array)`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      const content = data.content[0].text;
+      
+      // Clean and parse JSON response
+      const cleanJson = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const ads = JSON.parse(cleanJson);
+      
+      // Add scoring to each ad
+      const scoredAds = ads.map(ad => ({
+        ...ad,
+        score: ad.score || calculateAdScore(ad),
+        strengths: ad.strengths || ['Clear messaging', 'Engaging copy', 'Strong CTA'],
+        improvements: ad.improvements || ['Add more urgency', 'Include social proof']
+      }));
+      
+      setGeneratedAds(scoredAds);
+      setStep(2);
+    } catch (error) {
+      console.error('AI Generation Error:', error);
+      // Fallback to mock data if API fails
+      setGeneratedAds(generateMockAds());
+      setStep(2);
+    }
+    
+    setLoading(false);
+  };
+
+  // Scoring Algorithm
+  const calculateAdScore = (ad) => {
+    let score = 70; // Base score
+    
+    // Check headline length (ideal: 40-60 chars)
+    if (ad.headline.length >= 40 && ad.headline.length <= 60) score += 5;
+    
+    // Check for emojis
+    if (ad.emojis && ad.emojis.length >= 3) score += 5;
+    
+    // Check for hashtags
+    if (ad.hashtags && ad.hashtags.length >= 2) score += 5;
+    
+    // Check for CTA presence
+    if (ad.cta && ad.cta.length > 0) score += 10;
+    
+    // Check body length (ideal: 100-150 chars)
+    if (ad.body.length >= 100 && ad.body.length <= 150) score += 5;
+    
+    return Math.min(score, 100);
+  };
+
+  // Mock data generator (fallback)
+  const generateMockAds = () => {
+    return [
+      {
+        headline: `${formData.businessName} की धमाकेदार ऑफर! 🎉`,
+        body: `${formData.product} पर ${formData.offer}! सिर्फ आज के लिए विशेष छूट। जल्दी करें, स्टॉक सीमित है!`,
+        cta: formData.cta || 'अभी ऑर्डर करें',
+        emojis: ['🎉', '🔥', '✨', '💫'],
+        hashtags: ['#SpecialOffer', '#LimitedTime', '#ShopNow'],
+        score: 92,
+        strengths: ['Strong urgency', 'Clear offer', 'Cultural relevance'],
+        improvements: ['Add social proof', 'Include price point']
+      },
+      {
+        headline: `${formData.product} - आपके लिए बेस्ट डील! 💯`,
+        body: `${formData.targetAudience} के लिए खास! ${formData.offer} के साथ। आज ही घर बैठे मंगवाएं।`,
+        cta: formData.cta || 'WhatsApp करें',
+        emojis: ['💯', '🎯', '⭐', '🛍️'],
+        hashtags: ['#BestDeal', '#QualityProduct', '#TrustedBrand'],
+        score: 88,
+        strengths: ['Targeted messaging', 'Trust indicators', 'Easy action'],
+        improvements: ['Add testimonial', 'Show before/after']
+      },
+      {
+        headline: `🔥 ${formData.businessName} का सबसे बड़ा ऑफर`,
+        body: `${formData.product} अब ${formData.offer}! हजारों ग्राहक खुश हैं। अब आपकी बारी!`,
+        cta: formData.cta || 'आज ही खरीदें',
+        emojis: ['🔥', '💝', '🌟', '👍'],
+        hashtags: ['#BiggestSale', '#CustomerFavorite', '#MustHave'],
+        score: 85,
+        strengths: ['Social proof', 'FOMO creation', 'Clear benefit'],
+        improvements: ['Specify quantity', 'Add deadline']
+      },
+      {
+        headline: `${formData.product} - विश्वास की गारंटी! ⭐`,
+        body: `${formData.businessName} से ${formData.offer}! 100% असली प्रोडक्ट। फ्री डिलीवरी!`,
+        cta: formData.cta || 'अभी कॉल करें',
+        emojis: ['⭐', '✅', '🚚', '💝'],
+        hashtags: ['#Guaranteed', '#FreeDelivery', '#Authentic'],
+        score: 90,
+        strengths: ['Trust building', 'Added value (free delivery)', 'Authenticity'],
+        improvements: ['Add time limit', 'Show reviews']
+      },
+      {
+        headline: `जल्दी करें! ${formData.product} Stock खत्म होने वाला 🏃`,
+        body: `${formData.offer} - सिर्फ आज! ${formData.targetAudience} के लिए स्पेशल। Miss मत करें!`,
+        cta: formData.cta || 'Book Now',
+        emojis: ['🏃', '⚡', '🎁', '💥'],
+        hashtags: ['#LastChance', '#HurryUp', '#TodayOnly'],
+        score: 87,
+        strengths: ['High urgency', 'Scarcity tactics', 'Action-oriented'],
+        improvements: ['Add specific numbers', 'Include testimonial']
+      }
+    ];
+  };
+
+  // Regenerate specific ad
+  const regenerateAd = async (index) => {
+    const newAds = [...generatedAds];
+    newAds[index] = { ...newAds[index], loading: true };
+    setGeneratedAds(newAds);
+    
+    // Simulate regeneration
+    setTimeout(() => {
+      const mockAd = generateMockAds()[Math.floor(Math.random() * 5)];
+      newAds[index] = mockAd;
+      setGeneratedAds(newAds);
+    }, 1500);
+  };
+
+  const getScoreColor = (score) => {
+    if (score >= 90) return 'text-green-400';
+    if (score >= 80) return 'text-yellow-400';
+    return 'text-orange-400';
+  };
+
+  const getScoreBg = (score) => {
+    if (score >= 90) return 'bg-green-500/20 border-green-500/30';
+    if (score >= 80) return 'bg-yellow-500/20 border-yellow-500/30';
+    return 'bg-orange-500/20 border-orange-500/30';
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white p-4">
+      <div className="max-w-6xl mx-auto py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <h1 className="text-4xl font-bold">VernAI Ad Generator</h1>
+          </div>
+          <p className="text-gray-400 text-lg">Create 5+ high-converting ads in 30 seconds with AI</p>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="flex items-center justify-center gap-4 mb-12">
+          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-purple-400' : 'text-gray-600'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 1 ? 'border-purple-400 bg-purple-500/20' : 'border-gray-600'}`}>
+              {step > 1 ? <CheckCircle className="w-5 h-5" /> : '1'}
+            </div>
+            <span className="font-semibold">Input Details</span>
+          </div>
+          <div className="w-16 h-0.5 bg-gray-700"></div>
+          <div className={`flex items-center gap-2 ${step >= 2 ? 'text-purple-400' : 'text-gray-600'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 2 ? 'border-purple-400 bg-purple-500/20' : 'border-gray-600'}`}>
+              2
+            </div>
+            <span className="font-semibold">AI Generated Ads</span>
+          </div>
+        </div>
+
+        {/* Step 1: Input Form */}
+        {step === 1 && (
+          <div className="bg-slate-900/50 backdrop-blur border border-purple-500/20 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+              <Target className="w-6 h-6 text-purple-400" />
+              Tell Us About Your Business
+            </h2>
+
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Business Name *</label>
+                  <input
+                    type="text"
+                    value={formData.businessName}
+                    onChange={(e) => setFormData({...formData, businessName: e.target.value})}
+                    placeholder="e.g., Raj Electronics"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Product/Service *</label>
+                  <input
+                    type="text"
+                    value={formData.product}
+                    onChange={(e) => setFormData({...formData, product: e.target.value})}
+                    placeholder="e.g., LED TV, Sarees, Mobile Repair"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">Target Audience *</label>
+                <input
+                  type="text"
+                  value={formData.targetAudience}
+                  onChange={(e) => setFormData({...formData, targetAudience: e.target.value})}
+                  placeholder="e.g., Young professionals, Housewives, Students"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Language *</label>
+                  <select
+                    value={formData.language}
+                    onChange={(e) => setFormData({...formData, language: e.target.value})}
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="hindi">Hindi (हिंदी)</option>
+                    <option value="english">English</option>
+                    <option value="hinglish">Hinglish (Mix)</option>
+                    <option value="tamil">Tamil (தமிழ்)</option>
+                    <option value="bengali">Bengali (বাংলা)</option>
+                    <option value="marathi">Marathi (मराठी)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Tone *</label>
+                  <select
+                    value={formData.tone}
+                    onChange={(e) => setFormData({...formData, tone: e.target.value})}
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="friendly">Friendly & Casual</option>
+                    <option value="professional">Professional</option>
+                    <option value="urgent">Urgent & Exciting</option>
+                    <option value="trustworthy">Trustworthy & Reliable</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">Special Offer *</label>
+                <input
+                  type="text"
+                  value={formData.offer}
+                  onChange={(e) => setFormData({...formData, offer: e.target.value})}
+                  placeholder="e.g., 50% OFF, Buy 1 Get 1 Free, Diwali Special"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">Call-to-Action</label>
+                <input
+                  type="text"
+                  value={formData.cta}
+                  onChange={(e) => setFormData({...formData, cta: e.target.value})}
+                  placeholder="e.g., Order Now, Call Today, Visit Store (optional)"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <button
+                onClick={generateAds}
+                disabled={!formData.businessName || !formData.product || !formData.targetAudience || !formData.offer || loading}
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700 transition font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Generating Your Ads...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    Generate 5+ Ad Variations
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Generated Ads */}
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Zap className="w-6 h-6 text-purple-400" />
+                Your AI-Generated Ads
+              </h2>
+              <button
+                onClick={() => setStep(1)}
+                className="px-4 py-2 bg-slate-800/50 border border-purple-500/20 rounded-lg hover:bg-slate-800 transition"
+              >
+                ← Back to Edit
+              </button>
+            </div>
+
+            <div className="grid gap-6">
+              {generatedAds.map((ad, index) => (
+                <div key={index} className="bg-slate-900/50 backdrop-blur border border-purple-500/20 rounded-2xl p-6 hover:border-purple-500/40 transition">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`px-3 py-1 rounded-lg border ${getScoreBg(ad.score)}`}>
+                        <div className="flex items-center gap-1">
+                          <Star className={`w-4 h-4 ${getScoreColor(ad.score)}`} />
+                          <span className={`font-bold ${getScoreColor(ad.score)}`}>
+                            {ad.score}/100
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-sm text-gray-400">Variation {index + 1}</span>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => regenerateAd(index)}
+                        className="p-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg transition"
+                        title="Regenerate this ad"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const text = `${ad.headline}\n\n${ad.body}\n\n${ad.cta}\n\n${ad.emojis.join(' ')} ${ad.hashtags.join(' ')}`;
+                          navigator.clipboard.writeText(text);
+                        }}
+                        className="p-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg transition"
+                        title="Copy to clipboard"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">HEADLINE</div>
+                      <div className="text-xl font-bold text-purple-300">{ad.headline}</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">BODY</div>
+                      <div className="text-gray-300">{ad.body}</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">CALL-TO-ACTION</div>
+                      <div className="inline-block px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold">
+                        {ad.cta}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">EMOJIS</div>
+                        <div className="text-2xl">{ad.emojis.join(' ')}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">HASHTAGS</div>
+                        <div className="text-sm text-purple-400">{ad.hashtags.join(' ')}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-purple-500/20">
+                    <div>
+                      <div className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        STRENGTHS
+                      </div>
+                      <ul className="text-sm text-gray-400 space-y-1">
+                        {ad.strengths.map((strength, i) => (
+                          <li key={i}>• {strength}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-yellow-400 mb-2 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        IMPROVEMENTS
+                      </div>
+                      <ul className="text-sm text-gray-400 space-y-1">
+                        {ad.improvements.map((improvement, i) => (
+                          <li key={i}>• {improvement}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={generateAds}
+                className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700 transition font-semibold flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Generate More Variations
+              </button>
+              <button
+                className="flex-1 py-4 bg-slate-800/50 border border-purple-500/20 rounded-lg hover:bg-slate-800 transition font-semibold flex items-center justify-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Export All Ads
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
