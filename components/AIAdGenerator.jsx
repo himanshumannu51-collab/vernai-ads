@@ -1,3 +1,4 @@
+// components/AIAdGenerator.jsx
 import React, { useState } from 'react';
 import { Sparkles, Target, TrendingUp, RefreshCw, Copy, Download, Star, Zap, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
@@ -14,7 +15,6 @@ export default function AIAdGenerator() {
     cta: ''
   });
   const [generatedAds, setGeneratedAds] = useState([]);
-  const [selectedAd, setSelectedAd] = useState(null);
 
   // AI Ad Generation Function
   const generateAds = async () => {
@@ -28,7 +28,7 @@ Product/Service: ${formData.product}
 Target Audience: ${formData.targetAudience}
 Tone: ${formData.tone}
 Special Offer: ${formData.offer}
-Call-to-Action: ${formData.cta}
+Call-to-Action: ${formData.cta || 'Order Now'}
 
 For each ad variation, provide:
 1. A catchy headline (max 60 characters)
@@ -39,33 +39,30 @@ For each ad variation, provide:
 
 Make them culturally relevant for Indian audiences. Use local expressions, festivals references where appropriate.
 
-Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emojis, hashtags, score (0-100), strengths (array), improvements (array)`;
+Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emojis (array), hashtags (array), score (number 0-100), strengths (array of strings), improvements (array of strings)`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Call YOUR backend API (not direct Claude API)
+      const response = await fetch('/api/generate-ads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
+          prompt: prompt,
+          formData: formData
         })
       });
 
       const data = await response.json();
-      const content = data.content[0].text;
       
-      // Clean and parse JSON response
-      const cleanJson = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const ads = JSON.parse(cleanJson);
+      if (data.error) {
+        throw new Error(data.error);
+      }
       
-      // Add scoring to each ad
+      // Parse the AI response
+      let ads = data.ads;
+      
+      // Add scoring if not present
       const scoredAds = ads.map(ad => ({
         ...ad,
         score: ad.score || calculateAdScore(ad),
@@ -77,9 +74,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
       setStep(2);
     } catch (error) {
       console.error('AI Generation Error:', error);
-      // Fallback to mock data if API fails
-      setGeneratedAds(generateMockAds());
-      setStep(2);
+      alert('Failed to generate ads. Please try again.');
     }
     
     setLoading(false);
@@ -87,80 +82,13 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
 
   // Scoring Algorithm
   const calculateAdScore = (ad) => {
-    let score = 70; // Base score
-    
-    // Check headline length (ideal: 40-60 chars)
-    if (ad.headline.length >= 40 && ad.headline.length <= 60) score += 5;
-    
-    // Check for emojis
-    if (ad.emojis && ad.emojis.length >= 3) score += 5;
-    
-    // Check for hashtags
-    if (ad.hashtags && ad.hashtags.length >= 2) score += 5;
-    
-    // Check for CTA presence
-    if (ad.cta && ad.cta.length > 0) score += 10;
-    
-    // Check body length (ideal: 100-150 chars)
-    if (ad.body.length >= 100 && ad.body.length <= 150) score += 5;
-    
+    let score = 70;
+    if (ad.headline?.length >= 40 && ad.headline?.length <= 60) score += 5;
+    if (ad.emojis?.length >= 3) score += 5;
+    if (ad.hashtags?.length >= 2) score += 5;
+    if (ad.cta?.length > 0) score += 10;
+    if (ad.body?.length >= 100 && ad.body?.length <= 150) score += 5;
     return Math.min(score, 100);
-  };
-
-  // Mock data generator (fallback)
-  const generateMockAds = () => {
-    return [
-      {
-        headline: `${formData.businessName} की धमाकेदार ऑफर! 🎉`,
-        body: `${formData.product} पर ${formData.offer}! सिर्फ आज के लिए विशेष छूट। जल्दी करें, स्टॉक सीमित है!`,
-        cta: formData.cta || 'अभी ऑर्डर करें',
-        emojis: ['🎉', '🔥', '✨', '💫'],
-        hashtags: ['#SpecialOffer', '#LimitedTime', '#ShopNow'],
-        score: 92,
-        strengths: ['Strong urgency', 'Clear offer', 'Cultural relevance'],
-        improvements: ['Add social proof', 'Include price point']
-      },
-      {
-        headline: `${formData.product} - आपके लिए बेस्ट डील! 💯`,
-        body: `${formData.targetAudience} के लिए खास! ${formData.offer} के साथ। आज ही घर बैठे मंगवाएं।`,
-        cta: formData.cta || 'WhatsApp करें',
-        emojis: ['💯', '🎯', '⭐', '🛍️'],
-        hashtags: ['#BestDeal', '#QualityProduct', '#TrustedBrand'],
-        score: 88,
-        strengths: ['Targeted messaging', 'Trust indicators', 'Easy action'],
-        improvements: ['Add testimonial', 'Show before/after']
-      },
-      {
-        headline: `🔥 ${formData.businessName} का सबसे बड़ा ऑफर`,
-        body: `${formData.product} अब ${formData.offer}! हजारों ग्राहक खुश हैं। अब आपकी बारी!`,
-        cta: formData.cta || 'आज ही खरीदें',
-        emojis: ['🔥', '💝', '🌟', '👍'],
-        hashtags: ['#BiggestSale', '#CustomerFavorite', '#MustHave'],
-        score: 85,
-        strengths: ['Social proof', 'FOMO creation', 'Clear benefit'],
-        improvements: ['Specify quantity', 'Add deadline']
-      },
-      {
-        headline: `${formData.product} - विश्वास की गारंटी! ⭐`,
-        body: `${formData.businessName} से ${formData.offer}! 100% असली प्रोडक्ट। फ्री डिलीवरी!`,
-        cta: formData.cta || 'अभी कॉल करें',
-        emojis: ['⭐', '✅', '🚚', '💝'],
-        hashtags: ['#Guaranteed', '#FreeDelivery', '#Authentic'],
-        score: 90,
-        strengths: ['Trust building', 'Added value (free delivery)', 'Authenticity'],
-        improvements: ['Add time limit', 'Show reviews']
-      },
-      {
-        headline: `जल्दी करें! ${formData.product} Stock खत्म होने वाला 🏃`,
-        body: `${formData.offer} - सिर्फ आज! ${formData.targetAudience} के लिए स्पेशल। Miss मत करें!`,
-        cta: formData.cta || 'Book Now',
-        emojis: ['🏃', '⚡', '🎁', '💥'],
-        hashtags: ['#LastChance', '#HurryUp', '#TodayOnly'],
-        score: 87,
-        strengths: ['High urgency', 'Scarcity tactics', 'Action-oriented'],
-        improvements: ['Add specific numbers', 'Include testimonial']
-      }
-    ];
   };
 
   // Regenerate specific ad
@@ -169,12 +97,29 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
     newAds[index] = { ...newAds[index], loading: true };
     setGeneratedAds(newAds);
     
-    // Simulate regeneration
-    setTimeout(() => {
-      const mockAd = generateMockAds()[Math.floor(Math.random() * 5)];
-      newAds[index] = mockAd;
+    try {
+      const response = await fetch('/api/generate-ads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: `Generate 1 new ad variation with same requirements`,
+          formData: formData,
+          single: true
+        })
+      });
+
+      const data = await response.json();
+      if (data.ads && data.ads[0]) {
+        newAds[index] = data.ads[0];
+        setGeneratedAds(newAds);
+      }
+    } catch (error) {
+      console.error('Regeneration error:', error);
+      newAds[index].loading = false;
       setGeneratedAds(newAds);
-    }, 1500);
+    }
   };
 
   const getScoreColor = (score) => {
@@ -187,6 +132,32 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
     if (score >= 90) return 'bg-green-500/20 border-green-500/30';
     if (score >= 80) return 'bg-yellow-500/20 border-yellow-500/30';
     return 'bg-orange-500/20 border-orange-500/30';
+  };
+
+  const copyToClipboard = (ad) => {
+    const text = `${ad.headline}\n\n${ad.body}\n\n${ad.cta}\n\n${ad.emojis.join(' ')} ${ad.hashtags.join(' ')}`;
+    navigator.clipboard.writeText(text);
+    alert('Ad copied to clipboard!');
+  };
+
+  const exportAllAds = () => {
+    const text = generatedAds.map((ad, i) => 
+      `=== AD VARIATION ${i + 1} (Score: ${ad.score}/100) ===\n\n` +
+      `HEADLINE: ${ad.headline}\n\n` +
+      `BODY: ${ad.body}\n\n` +
+      `CTA: ${ad.cta}\n\n` +
+      `EMOJIS: ${ad.emojis.join(' ')}\n` +
+      `HASHTAGS: ${ad.hashtags.join(' ')}\n\n` +
+      `STRENGTHS:\n${ad.strengths.map(s => `• ${s}`).join('\n')}\n\n` +
+      `IMPROVEMENTS:\n${ad.improvements.map(i => `• ${i}`).join('\n')}\n\n`
+    ).join('\n---\n\n');
+    
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vernai-ads-${Date.now()}.txt`;
+    a.click();
   };
 
   return (
@@ -237,7 +208,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                     value={formData.businessName}
                     onChange={(e) => setFormData({...formData, businessName: e.target.value})}
                     placeholder="e.g., Raj Electronics"
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                   />
                 </div>
 
@@ -248,7 +219,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                     value={formData.product}
                     onChange={(e) => setFormData({...formData, product: e.target.value})}
                     placeholder="e.g., LED TV, Sarees, Mobile Repair"
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                   />
                 </div>
               </div>
@@ -260,7 +231,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                   value={formData.targetAudience}
                   onChange={(e) => setFormData({...formData, targetAudience: e.target.value})}
                   placeholder="e.g., Young professionals, Housewives, Students"
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                 />
               </div>
 
@@ -270,7 +241,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                   <select
                     value={formData.language}
                     onChange={(e) => setFormData({...formData, language: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                   >
                     <option value="hindi">Hindi (हिंदी)</option>
                     <option value="english">English</option>
@@ -286,7 +257,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                   <select
                     value={formData.tone}
                     onChange={(e) => setFormData({...formData, tone: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                   >
                     <option value="friendly">Friendly & Casual</option>
                     <option value="professional">Professional</option>
@@ -303,18 +274,18 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                   value={formData.offer}
                   onChange={(e) => setFormData({...formData, offer: e.target.value})}
                   placeholder="e.g., 50% OFF, Buy 1 Get 1 Free, Diwali Special"
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Call-to-Action</label>
+                <label className="block text-sm font-semibold mb-2">Call-to-Action (Optional)</label>
                 <input
                   type="text"
                   value={formData.cta}
                   onChange={(e) => setFormData({...formData, cta: e.target.value})}
-                  placeholder="e.g., Order Now, Call Today, Visit Store (optional)"
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="e.g., Order Now, Call Today, Visit Store"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-purple-500/20 rounded-lg focus:border-purple-500 focus:outline-none text-white"
                 />
               </div>
 
@@ -331,7 +302,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Generate 5+ Ad Variations
+                    Generate 5+ Ad Variations with AI
                   </>
                 )}
               </button>
@@ -380,10 +351,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                         <RefreshCw className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          const text = `${ad.headline}\n\n${ad.body}\n\n${ad.cta}\n\n${ad.emojis.join(' ')} ${ad.hashtags.join(' ')}`;
-                          navigator.clipboard.writeText(text);
-                        }}
+                        onClick={() => copyToClipboard(ad)}
                         className="p-2 bg-slate-800/50 hover:bg-slate-800 rounded-lg transition"
                         title="Copy to clipboard"
                       >
@@ -413,11 +381,11 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                     <div className="flex gap-4">
                       <div>
                         <div className="text-xs text-gray-500 mb-1">EMOJIS</div>
-                        <div className="text-2xl">{ad.emojis.join(' ')}</div>
+                        <div className="text-2xl">{ad.emojis?.join(' ') || '🎉'}</div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500 mb-1">HASHTAGS</div>
-                        <div className="text-sm text-purple-400">{ad.hashtags.join(' ')}</div>
+                        <div className="text-sm text-purple-400">{ad.hashtags?.join(' ') || '#ad'}</div>
                       </div>
                     </div>
                   </div>
@@ -429,7 +397,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                         STRENGTHS
                       </div>
                       <ul className="text-sm text-gray-400 space-y-1">
-                        {ad.strengths.map((strength, i) => (
+                        {ad.strengths?.map((strength, i) => (
                           <li key={i}>• {strength}</li>
                         ))}
                       </ul>
@@ -440,7 +408,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                         IMPROVEMENTS
                       </div>
                       <ul className="text-sm text-gray-400 space-y-1">
-                        {ad.improvements.map((improvement, i) => (
+                        {ad.improvements?.map((improvement, i) => (
                           <li key={i}>• {improvement}</li>
                         ))}
                       </ul>
@@ -459,6 +427,7 @@ Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emoji
                 Generate More Variations
               </button>
               <button
+                onClick={exportAllAds}
                 className="flex-1 py-4 bg-slate-800/50 border border-purple-500/20 rounded-lg hover:bg-slate-800 transition font-semibold flex items-center justify-center gap-2"
               >
                 <Download className="w-5 h-5" />
