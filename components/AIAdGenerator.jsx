@@ -21,25 +21,43 @@ export default function AIAdGenerator() {
     setLoading(true);
     
     try {
-      const prompt = `You are an expert Indian ad copywriter. Create 5 high-converting ${formData.language} advertisement variations for:
+      const prompt = `Create 5 high-converting ${formData.language} advertisement variations for an Indian business.
 
-Business: ${formData.businessName}
-Product/Service: ${formData.product}
-Target Audience: ${formData.targetAudience}
-Tone: ${formData.tone}
-Special Offer: ${formData.offer}
-Call-to-Action: ${formData.cta || 'Order Now'}
+Business Details:
+- Name: ${formData.businessName}
+- Product/Service: ${formData.product}
+- Target Audience: ${formData.targetAudience}
+- Tone: ${formData.tone}
+- Special Offer: ${formData.offer}
+- Call-to-Action: ${formData.cta || 'Order Now'}
 
-For each ad variation, provide:
-1. A catchy headline (max 60 characters)
-2. Main body copy (2-3 sentences, max 150 characters)
-3. Strong call-to-action
-4. 3-5 relevant emojis
-5. 2-3 hashtags
+Requirements for EACH ad:
+- Catchy headline (40-60 characters)
+- Engaging body copy (2-3 sentences, 100-150 characters)
+- Clear call-to-action
+- 3-5 relevant emojis (as array)
+- 2-3 hashtags (as array)
+- Performance score (0-100)
+- 3 strengths (array)
+- 2 improvements (array)
 
-Make them culturally relevant for Indian audiences. Use local expressions, festivals references where appropriate.
+Make ads culturally relevant for Indian audiences with local expressions and festival references where appropriate.
 
-Return ONLY a JSON array with 5 objects, each having: headline, body, cta, emojis (array), hashtags (array), score (number 0-100), strengths (array of strings), improvements (array of strings)`;
+Return JSON in this EXACT format:
+{
+  "ads": [
+    {
+      "headline": "string",
+      "body": "string",
+      "cta": "string",
+      "emojis": ["emoji1", "emoji2"],
+      "hashtags": ["#tag1", "#tag2"],
+      "score": 90,
+      "strengths": ["strength1", "strength2", "strength3"],
+      "improvements": ["improvement1", "improvement2"]
+    }
+  ]
+}`;
 
       // Call YOUR backend API (not direct Claude API)
       const response = await fetch('/api/generate-ads', {
