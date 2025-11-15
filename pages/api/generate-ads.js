@@ -1,159 +1,138 @@
-@@ -1,61 +1,104 @@
+// pages/api/generate-ads.js
+import fetch from "node-fetch";
+import promptLib from "../../lib/promptTemplates";
+
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { product, audience, language } = req.body;
+  const {
+    product = "",
+    audience = "",
+    language = "English",
+    template = "Facebook Ad",
+    tone = "Default",
+    variations = 5,
+    booster = false,
+    competitor = "",
+    brandVoice = "",
+  } = req.body || {};
+
+  // Basic validation
+  const n = parseInt(variations, 10) || 1;
+  if (n < 1 || n > 20) {
+    return res.status(400).json({ error: "variations must be between 1 and 20" });
+  }
 
   if (!process.env.GROQ_API_KEY) {
-    console.error("❌ Missing GROQ_API_KEY");
-    return res.status(500).json({ error: "Server misconfigured" });
+    return res.status(500).json({ error: "GROQ_API_KEY not configured" });
   }
 
   try {
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",  // ✅ CORRECT MODEL
-          messages: [
-            {
-              role: "system",
-              content:
-                "You generate high-converting ad copies for Indian brands in all languages.",
-            },
-            {
-              role: "user",
-              content: `Generate 5 ad variations for:
-Product: ${product}
-Audience: ${audience}
-Language: ${language}`,
-            },
-          ],
-          temperature: 0.8,
-          max_completion_tokens: 500, // ✅ CORRECT PARAM
-        }),
-      }
-    );
-import { useState } from "react";
+    // Build prompt using centralized prompt builder
+    const prompt = promptLib.buildAdPrompt({
+      template,
+      product,
+      audience,
+      language,
+      tone,
+      variations: n,
+      brandVoice,
+      booster,
+      competitor,
+    });
 
-    const data = await response.json();
-    console.log("🔍 Groq raw response:", JSON.stringify(data, null, 2));
-export default function Generate() {
-  const [product, setProduct] = useState("");
-  const [audience, setAudience] = useState("");
-  const [language, setLanguage] = useState("English");
-  const [ads, setAds] = useState([]);
-  const [loading, setLoading] = useState(false);
+    // Recommend max tokens
+    const recommended = promptLib.recommendMaxTokens({ template, variations: n });
 
-    const output = data?.choices?.[0]?.message?.content;
-  const generateAds = async () => {
-    setLoading(true);
-    setAds([]);
+    // Prepare request body for Groq
+    const body = {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that writes high-converting marketing copy." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.8,
+      max_completion_tokens: recommended,
+      top_p: 1.0,
+    };
 
-    if (!output) {
-      return res.status(500).json({
-        error: "No output from AI",
-        groqResponse: data, // send raw response to debug
-    try {
-      const res = await fetch("/api/generate-ads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product, audience, language }),
-      });
+    // Call Groq
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
 
-      const data = await res.json();
-      if (data.error) {
-        setAds([{ headline: "Error", description: data.error }]);
-      } else {
-        const cleaned = data.ads
-          .split(/\*\*Ad Variation|Ad Variation|\n|\r/)
-          .filter((t) => t.trim().length > 0)
-          .map((block) => ({ description: block.trim() }));
-        setAds(cleaned);
-      }
-    } catch (err) {
-      setAds([{ headline: "Error", description: "Something went wrong" }]);
+    // If non-2xx, return debug info
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("Groq non-200:", response.status, text);
+      return res.status(502).json({ error: "Upstream error from Groq", status: response.status, detail: text });
     }
 
-    return res.status(200).json({ ads: output });
-  } catch (error) {
-    console.error("❌ API ERROR:", error);
-    return res.status(500).json({ error: "Server Error" });
+    const data = await response.json();
+
+    // Defensive checks
+    const rawContent = data?.choices?.[0]?.message?.content || "";
+    if (!rawContent || rawContent.trim().length === 0) {
+      return res.status(500).json({ error: "No output from AI", raw: data });
+    }
+
+    // Split reliably on delimiter. Prompt builder uses "### Variation 1:" pattern.
+    // Accept multiple split patterns to be robust.
+    const splitPatterns = [/### Variation\s*\d+:?/i, /Variation\s*\d+:?/i, /\n-{3,}\n/, /\n\n+/];
+    let parts = [];
+
+    // Try the canonical delimiter first
+    if (/### Variation/i.test(rawContent)) {
+      parts = rawContent
+        .split(/### Variation\s*\d+:?/i)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else {
+      // fallback split using newlines double-break
+      parts = rawContent
+        .split(/\n{2,}/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    // If parts length doesn't match requested n, try a looser split and then cut to n
+    if (parts.length < n) {
+      const alt = rawContent
+        .split(/\n-+\n|•|-\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (alt.length >= n) parts = alt.slice(0, n);
+    }
+
+    // Final fallback: return the whole output as a single variation
+    if (parts.length === 0) {
+      parts = [rawContent.trim()];
+    }
+
+    // Trim and ensure we have at most n items
+    const items = parts.slice(0, n).map((p) => p.trim());
+
+    // Return structured result
+    return res.status(200).json({
+      ads: items,
+      meta: {
+        variationsRequested: n,
+        variationsReturned: items.length,
+        recommendedMaxTokens: recommended,
+      },
+      raw: data, // include raw for debugging (remove in prod or behind debug flag)
+    });
+  } catch (err) {
+    console.error("API handler error:", err);
+    return res.status(500).json({ error: "Server error", detail: err.message });
   }
-    setLoading(false);
-  };
-
-  const copyText = (text) => navigator.clipboard.writeText(text);
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center">
-      <h1 className="text-4xl font-extrabold mb-6 text-blue-700">VernAI Ads</h1>
-      <p className="text-gray-600 mb-10 text-lg text-center max-w-2xl">
-        Generate high‑converting ad copy instantly using Groq AI
-      </p>
-
-      <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-xl">
-        <label className="font-semibold">Product</label>
-        <input
-          className="w-full p-2 border rounded mb-4"
-          value={product}
-          onChange={(e) => setProduct(e.target.value)}
-          placeholder="Example: Car, Perfume, Shoes"
-        />
-
-        <label className="font-semibold">Audience</label>
-        <input
-          className="w-full p-2 border rounded mb-4"
-          value={audience}
-          onChange={(e) => setAudience(e.target.value)}
-          placeholder="Students, Moms, Men 20‑35"
-        />
-
-        <label className="font-semibold">Language</label>
-        <select
-          className="w-full p-2 border rounded mb-6"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          <option>English</option>
-          <option>Hindi</option>
-          <option>Hinglish</option>
-          <option>Tamil</option>
-          <option>Marathi</option>
-          <option>Bengali</option>
-        </select>
-
-        <button
-          onClick={generateAds}
-          className="w-full bg-blue-600 text-white p-3 rounded-xl text-lg font-semibold hover:bg-blue-700 transition"
-        >
-          {loading ? "Generating..." : "Generate Ads"}
-        </button>
-      </div>
-
-      <div className="mt-10 w-full max-w-3xl grid grid-cols-1 gap-6">
-        {ads.map((ad, index) => (
-          <div
-            key={index}
-            className="bg-white shadow-lg p-6 rounded-xl border border-gray-200"
-          >
-            <p className="whitespace-pre-wrap text-gray-800 mb-4 text-lg">{ad.description}</p>
-            <button
-              className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-black"
-              onClick={() => copyText(ad.description)}
-            >
-              Copy
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
