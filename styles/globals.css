@@ -2,18 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  html {
-    font-family: system-ui, sans-serif;
-  }
-}
-
-@layer components {
-  .ad-template {
-    @apply bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all;
-  }
-}
-
-#__next {
-  min-height: 100vh;
+/* You can add your custom styles below */
+body {
+  font-family: sans-serif;
 }
