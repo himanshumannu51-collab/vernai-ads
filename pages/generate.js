@@ -90,4 +90,11 @@ export default function Generate() {
         </button>
 
         {ads && (
-          <div className="mt-6 whitespace-pre-wrap bg-gra
+          <div className="mt-6 whitespace-pre-wrap bg-gray-50 p-4 rounded border">
+            {ads}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
